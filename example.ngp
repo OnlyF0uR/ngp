@@ -1,0 +1,35 @@
+// Functions can be pub or private (absence of pub keyword)
+// Public functions can be imported, private functions cannot.
+// Each function must return a type, convetionally u8 for 'voids', where
+// 0 indicates success and 1 indicates failure.
+
+pub fn sum <i32 number1, i32 number2> :: i32 {
+  return number1 + number2;
+}
+
+// The :: represents the port operator, which is a analogous way
+// of indicating that a function yields a result, or when called
+// it is entered with parameters.
+
+// Main is a unique function, and is the entry point of the program.
+// Only one such main may exist in a program.
+fn main :: u8 {
+  i32 some_number1 = 1;
+  i32 some_number2 = 3;
+
+  i32 some_number3 = sum::<number1, number2>;
+
+  std.iostream.println::<some_number3>;
+
+  [i32] some_array1 = [241,262];
+  // Array values are accessed by #index
+  i32 some_array_sum = sum::<some_array1#0, some_array1#1>;
+
+  std.iostream.println::<some_array_sum>;
+
+  if (some_array_sum == 503) {
+    return 0;
+  } else {
+    return 1;
+  }
+}
