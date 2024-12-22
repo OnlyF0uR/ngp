@@ -22,10 +22,8 @@ typedef struct {
 } Token;
 
 // Function declarations
-Token* create_token(TokenType type, const char* value);
-void free_token(Token* token);
 Token** tokenize(const char* input_str, size_t* token_count);
-void print_tokens(Token** tokens, size_t token_count);
+void print_tokens(Token** tokens, size_t token_count, TokenType* token_type);
 void free_tokens(Token** tokens, size_t token_count);
 
 #endif // LEXER_H

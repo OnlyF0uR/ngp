@@ -82,6 +82,9 @@ Token** tokenize(const char* input_str, size_t* token_count) {
                 i++;
             }
             char* identifier = strndup(input_str + start, i - start);
+            if (identifier == NULL) {
+                continue;
+            }
 
             // So if this is pub, fn, i32, u8, or return, it's a keyword
             if (strcmp(identifier, "pub") == 0 ||
@@ -116,14 +119,31 @@ Token** tokenize(const char* input_str, size_t* token_count) {
             while (i < len && isdigit(input_str[i])) {
                 i++;
             }
+
             char* number = strndup(input_str + start, i - start);
+            if (number == NULL) {
+                i--;
+                continue;
+            }
+
             add_token(&tokens, token_count, T_NUMBER, number);
             free(number);
             i--; // Adjust for the loop increment
         } else if (strchr("+-*/=", input_str[i])) {
-            // Parse an operator
+            // Check for comments
+            if (input_str[i] == '/' && i + 1 < len && input_str[i + 1] == '/') {
+                while (i < len && input_str[i] != '\n') {
+                    i++;
+                }
+                i--; // Adjust for the loop increment
+            } else {
+                // Parse an operator
+                char operator[2] = {input_str[i], '\0'};
+                add_token(&tokens, token_count, T_OPERATOR, operator);
+            }
+        } else if (strchr(";,.()[]{}:<>#", input_str[i])) {
             char operator[2] = {input_str[i], '\0'};
-            add_token(&tokens, token_count, T_OPERATOR, operator);
+            add_token(&tokens, token_count, T_PUNCTUATION, operator);
         } else {
             // Unknown token
             char unknown[2] = {input_str[i], '\0'};
@@ -141,8 +161,16 @@ void free_tokens(Token** tokens, size_t token_count) {
     free(tokens);
 }
 
-void print_tokens(Token** tokens, size_t token_count) {
+void print_token(Token* token) {
+    printf("Token Type: %s, Value: '%s'\n", token_type_to_str(token->type), token->value);
+}
+
+void print_tokens(Token** tokens, size_t token_count, TokenType* token_type) {
     for (size_t i = 0; i < token_count; i++) {
-        printf("Token Type: %s, Value: '%s'\n", token_type_to_str(tokens[i]->type), tokens[i]->value);
+        if (token_type != NULL && tokens[i]->type != *token_type) {
+            continue;
+        }
+
+        print_token(tokens[i]);
     }
 }

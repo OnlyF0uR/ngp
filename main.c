@@ -39,7 +39,9 @@ int main() {
     size_t token_count;
     Token** token_arr = tokenize(code, &token_count);
 
-    print_tokens(token_arr, token_count);
+    TokenType token_type = T_UNKNOWN;
+    print_tokens(token_arr, token_count, &token_type); // Print all unknown tokens, use NULL for all tokens
+
     free_tokens(token_arr, token_count);
 
     return 0;
