@@ -1,3 +1,4 @@
+#include "ast.h"
 #ifdef _MSC_VER
 #define _CRT_SECURE_NO_WARNINGS
 #endif
@@ -37,11 +38,13 @@ int main() {
 
     // Handle file reading and lexer
     handle_file_read("example.ngc", &buffer, &token_count);
-    print_tokens(buffer, token_count, NULL);
+    // print_tokens(buffer, token_count, NULL);
 
     // Pass the tokens to the parser
     Parser* parser = create_parser(buffer, token_count);
     run_parser(parser);
+
+    print_ast_node(parser->ast_root, 2);
 
     // Free everything
     free_parser(parser);

@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,25 +44,6 @@ const char* token_type_to_str(TokenType type) {
         case T_UNKNOWN: return "Unknown";
         default: return "Invalid";
     }
-}
-
-char* strndup(const char* str, size_t n) {
-    size_t len = 0;
-    while (len < n && str[len] != '\0') {
-        len++;
-    }
-
-    char* result = (char*)malloc(len + 1);
-    if (!result) {
-        return NULL;
-    }
-
-    for (size_t i = 0; i < len; i++) {
-        result[i] = str[i];
-    }
-
-    result[len] = '\0';
-    return result;
 }
 
 Token* make_token(TokenType type, const char* value, size_t line, size_t column, const char* filename) {
@@ -314,7 +296,7 @@ void tokenize_line(const char* line, size_t line_number, const char* filename, T
 
         else if (strchr("+-*/", line[i])) {
             if (line[i] == '/' && i + 1 < len && line[i + 1] == '/') {
-                size_t start = i;
+                // size_t start = i;
                 while (i < len && line[i] != '\n') {
                     i++;
                 }
