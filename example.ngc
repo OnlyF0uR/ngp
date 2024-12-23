@@ -44,6 +44,8 @@ fn main :: u8 {
   planet_heap.mass = 100;
   planet_heap.radius = 10;
 
+  std.iostream.println::<"Hello, world!">;
+
   return 0;
 }
 

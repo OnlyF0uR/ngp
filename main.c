@@ -37,7 +37,7 @@ int main() {
     handle_file_read("example.ngc", &buffer, &token_count);
 
     // TokenType token_type = T_UNKNOWN;
-    print_tokens(buffer, token_count, NULL); // Print all unknown tokens, use NULL for all tokens
+    print_tokens(buffer, token_count, NULL);
 
     free_tokens(buffer, token_count);
 

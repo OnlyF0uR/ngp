@@ -16,10 +16,28 @@ const char* token_type_to_str(TokenType type) {
         case T_IDENTIFIER: return "Identifier";
         case T_NUMBER: return "Number";
         case T_OPERATOR: return "Operator";
-        case T_PUNCTUATION: return "Punctuation";
         case T_TYPE: return "Type";
         case T_POINTER_TYPE: return "Pointer Type";
         case T_DOUBLE_COLON: return "Double Colon";
+        case T_L_PAREN: return "Left Paren.";
+        case T_R_PAREN: return "Right Paren.";
+        case T_L_BRACE: return "Left Brace";
+        case T_R_BRACE: return "Right Brace";
+        case T_L_BRACKET: return "Left Bracket";
+        case T_R_BRACKET: return "Right Bracket";
+        case T_STRING: return "String";
+        case T_SEMICOLON: return "Semicolon";
+        case T_COMMENT: return "Comment";
+        case T_COMMA: return "Comma";
+        case T_L_ANGLE_BRACKET: return "Left Angle Br.";
+        case T_R_ANGLE_BRACKET: return "Right Angle Br.";
+        case T_MACRO_CALL: return "Macro Call";
+        case T_DOT: return "Dot";
+        case T_EQUAL_SIGN: return "Equal Sign";
+        case T_NOT_EQUAL_SIGN: return "Not Equal Sign";
+        case T_EXCLAMATION_MARK: return "Exclamation Mark";
+        case T_COLON: return "Colon";
+        case T_HASH_SIGN: return "Hash Sign";
         case T_UNKNOWN: return "Unknown";
         default: return "Invalid";
     }
@@ -155,9 +173,25 @@ void tokenize_line(const char* line, size_t line_number, const char* filename, T
             add_token(buffer, token_count, T_DOUBLE_COLON, "::", line_number, column, filename);
             i++;  // Skip the second colon
             continue;
-        }
+        } else if (line[i] == '"') {
+            size_t start = i;
+            i++;
+            while (i < len && line[i] != '"') {
+                i++;
+            }
 
-        if (isalpha(line[i])) {
+            if (i >= len) {
+                break;
+            }
+
+            char* string = strndup(line + start + 1, i - start - 1);
+            if (string == NULL) {
+                continue;
+            }
+
+            add_token(buffer, token_count, T_STRING, string, line_number, column, filename);
+            free(string);
+        } else if (isalpha(line[i])) {
             size_t start = i;
             while (i < len && (isalnum(line[i]) || line[i] == '_')) {
                 i++;
@@ -208,7 +242,17 @@ void tokenize_line(const char* line, size_t line_number, const char* filename, T
             } else if (is_type) {
                 add_token(buffer, token_count, T_TYPE, identifier, line_number, column, filename);
             } else {
-                add_token(buffer, token_count, T_IDENTIFIER, identifier, line_number, column, filename);
+                // Check if the next character is a exclamation mark
+                // if so this is a macro call
+                if (next_pos < len && line[next_pos] == '!') {
+                    char* macro_call = (char*)malloc(strlen(identifier) + 2);
+                    sprintf(macro_call, "%s!", identifier);
+                    add_token(buffer, token_count, T_MACRO_CALL, macro_call, line_number, column, filename);
+                    free(macro_call);
+                    i++;
+                } else {
+                    add_token(buffer, token_count, T_IDENTIFIER, identifier, line_number, column, filename);
+                }
             }
 
             free(identifier);
@@ -228,7 +272,23 @@ void tokenize_line(const char* line, size_t line_number, const char* filename, T
             add_token(buffer, token_count, T_NUMBER, number, line_number, column, filename);
             free(number);
             i--;
-        } else if (strchr("+-*/=", line[i])) {
+        } else if (line[i] == '=') {
+            if (i + 1 < len && line[i + 1] == '=') {
+                add_token(buffer, token_count, T_EQUAL_SIGN, "==", line_number, column, filename);
+                i++;
+            } else {
+                add_token(buffer, token_count, T_OPERATOR, "=", line_number, column, filename);
+            }
+        } else if (line[i] == '!') {
+            if (i + 1 < len && line[i + 1] == '=') {
+                add_token(buffer, token_count, T_NOT_EQUAL_SIGN, "!=", line_number, column, filename);
+                i++;
+            } else {
+                add_token(buffer, token_count, T_EXCLAMATION_MARK, "!", line_number, column, filename);
+            }
+        }
+
+        else if (strchr("+-*/", line[i])) {
             if (line[i] == '/' && i + 1 < len && line[i + 1] == '/') {
                 while (i < len && line[i] != '\n') {
                     i++;
@@ -238,10 +298,33 @@ void tokenize_line(const char* line, size_t line_number, const char* filename, T
                 char operator[2] = {line[i], '\0'};
                 add_token(buffer, token_count, T_OPERATOR, operator, line_number, column, filename);
             }
-        } else if (strchr("{}()[];,", line[i])) {
-            char punct[2] = {line[i], '\0'};
-            add_token(buffer, token_count, T_PUNCTUATION, punct, line_number, column, filename);
-        } else {  // Skip single colons as they'll be handled by double colon check
+        } else if (line[i] == '(') {
+            add_token(buffer, token_count, T_L_PAREN, "(", line_number, column, filename);
+        } else if (line[i] == ')') {
+            add_token(buffer, token_count, T_R_PAREN, ")", line_number, column, filename);
+        } else if (line[i] == '{') {
+            add_token(buffer, token_count, T_L_BRACE, "{", line_number, column, filename);
+        } else if (line[i] == '}') {
+            add_token(buffer, token_count, T_R_BRACE, "}", line_number, column, filename);
+        } else if (line[i] == '[') {
+            add_token(buffer, token_count, T_L_BRACKET, "[", line_number, column, filename);
+        } else if (line[i] == ']') {
+            add_token(buffer, token_count, T_R_BRACKET, "]", line_number, column, filename);
+        } else if (line[i] == ';') {
+            add_token(buffer, token_count, T_SEMICOLON, ";", line_number, column, filename);
+        } else if (line[i] == ',') {
+            add_token(buffer, token_count, T_COMMA, ",", line_number, column, filename);
+        } else if (line[i] == '<') {
+            add_token(buffer, token_count, T_L_ANGLE_BRACKET, "<", line_number, column, filename);
+        } else if (line[i] == '>') {
+            add_token(buffer, token_count, T_R_ANGLE_BRACKET, ">", line_number, column, filename);
+        } else if (line[i] == '.') {
+            add_token(buffer, token_count, T_DOT, ".", line_number, column, filename);
+        } else if (line[i] == ':') {
+            add_token(buffer, token_count, T_COLON, ":", line_number, column, filename);
+        } else if (line[i] == '#') {
+            add_token(buffer, token_count, T_HASH_SIGN, "#", line_number, column, filename);
+        } else {
             char unknown[2] = {line[i], '\0'};
             add_token(buffer, token_count, T_UNKNOWN, unknown, line_number, column, filename);
         }
