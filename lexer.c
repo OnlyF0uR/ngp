@@ -38,6 +38,7 @@ const char* token_type_to_str(TokenType type) {
         case T_EXCLAMATION_MARK: return "Exclamation Mark";
         case T_COLON: return "Colon";
         case T_HASH_SIGN: return "Hash Sign";
+        case T_IMPORT: return "Import";
         case T_UNKNOWN: return "Unknown";
         default: return "Invalid";
     }
@@ -142,6 +143,11 @@ void print_tokens(Token** tokens, size_t token_count, TokenType* token_type) {
         if (token_type != NULL && tokens[i]->type != *token_type) {
             continue;
         }
+
+        // if (tokens[i]->type == T_COMMENT) {
+        //     continue;
+        // }
+
         print_token(tokens[i]);
     }
 
@@ -242,16 +248,33 @@ void tokenize_line(const char* line, size_t line_number, const char* filename, T
             } else if (is_type) {
                 add_token(buffer, token_count, T_TYPE, identifier, line_number, column, filename);
             } else {
-                // Check if the next character is a exclamation mark
-                // if so this is a macro call
-                if (next_pos < len && line[next_pos] == '!') {
-                    char* macro_call = (char*)malloc(strlen(identifier) + 2);
-                    sprintf(macro_call, "%s!", identifier);
-                    add_token(buffer, token_count, T_MACRO_CALL, macro_call, line_number, column, filename);
-                    free(macro_call);
+                // If it starts with import read until ; and add as a single token
+                if (strcmp(identifier, "import") == 0) {
+                    size_t start = i;
+                    while (i < len && line[i] != ';') {
+                        i++;
+                    }
+
+                    char* import = strndup(line + start + 1, i - start - 1); // Skip the space and the ';'
+                    if (import == NULL) {
+                        continue;
+                    }
                     i++;
+
+                    add_token(buffer, token_count, T_IMPORT, import, line_number, column, filename);
+                    free(import);
                 } else {
-                    add_token(buffer, token_count, T_IDENTIFIER, identifier, line_number, column, filename);
+                    // Check if the next character is a exclamation mark
+                    // if so this is a macro call
+                    if (next_pos < len && line[next_pos] == '!') {
+                        char* macro_call = (char*)malloc(strlen(identifier) + 2);
+                        sprintf(macro_call, "%s!", identifier);
+                        add_token(buffer, token_count, T_MACRO_CALL, macro_call, line_number, column, filename);
+                        free(macro_call);
+                        i++;
+                    } else {
+                        add_token(buffer, token_count, T_IDENTIFIER, identifier, line_number, column, filename);
+                    }
                 }
             }
 
@@ -290,9 +313,21 @@ void tokenize_line(const char* line, size_t line_number, const char* filename, T
 
         else if (strchr("+-*/", line[i])) {
             if (line[i] == '/' && i + 1 < len && line[i + 1] == '/') {
+                size_t start = i;
                 while (i < len && line[i] != '\n') {
                     i++;
                 }
+
+                // Add comments too
+                // char* comment = strndup(line + start, i - start);
+                // if (comment == NULL) {
+                //     i--;
+                //     continue;
+                // }
+
+                // add_token(buffer, token_count, T_COMMENT, comment, line_number, column, filename);
+                // free(comment);
+
                 i--;
             } else {
                 char operator[2] = {line[i], '\0'};

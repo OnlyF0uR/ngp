@@ -1,3 +1,5 @@
+import std.iostream.println;
+
 // Functions can be pub or private (absence of pub keyword)
 // Public functions can be imported, private functions cannot.
 // Each function must return a type, convetionally u8 for 'voids', where

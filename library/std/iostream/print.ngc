@@ -1,0 +1,4 @@
+pub fn sum <i32 number1> {
+    #[external(core.print_i32)]
+    print_i32::<number1>;
+}

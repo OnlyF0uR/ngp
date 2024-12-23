@@ -29,6 +29,7 @@ typedef enum {
     T_NOT_EQUAL_SIGN,
     T_COLON,
     T_HASH_SIGN,
+    T_IMPORT,
     T_UNKNOWN
 } TokenType;
 
