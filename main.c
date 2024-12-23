@@ -3,6 +3,7 @@
 #endif
 
 #include "lexer.h"
+#include "parser.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,11 +35,16 @@ int main() {
     Token** buffer = NULL;
     size_t token_count;
 
+    // Handle file reading and lexer
     handle_file_read("example.ngc", &buffer, &token_count);
-
-    // TokenType token_type = T_UNKNOWN;
     print_tokens(buffer, token_count, NULL);
 
+    // Pass the tokens to the parser
+    Parser* parser = create_parser(buffer, token_count);
+    run_parser(parser);
+
+    // Free everything
+    free_parser(parser);
     free_tokens(buffer, token_count);
 
     return 0;
