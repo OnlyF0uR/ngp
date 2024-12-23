@@ -3,14 +3,15 @@
 
 // Token types
 typedef enum {
-    T_KEYWORD, // 1
-    T_IDENTIFIER, // 2
-    T_NUMBER, // 3
-    T_OPERATOR,  // 4
-    T_PUNCTUATION, // 5
-    T_TYPE, // 6
-    T_UNKNOWN, // 7
-    T_END // 8
+    T_KEYWORD,
+    T_IDENTIFIER,
+    T_NUMBER,
+    T_OPERATOR,
+    T_PUNCTUATION,
+    T_TYPE,
+    T_POINTER_TYPE,
+    T_DOUBLE_COLON,
+    T_UNKNOWN
 } TokenType;
 
 const char* token_type_to_str(TokenType type);

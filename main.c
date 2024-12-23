@@ -23,9 +23,6 @@ void handle_file_read(const char* filename, Token*** tokens, size_t* token_count
             buffer[len-1] = '\0';
         }
 
-        // Log the line
-        // printf("Line %d: %s\n", line_number++, buffer);
-
         tokenize_line(buffer, line_number, filename, tokens, token_count);
         line_number++;
     }

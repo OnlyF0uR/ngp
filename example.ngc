@@ -11,6 +11,11 @@ pub fn sum <i32 number1, i32 number2> :: i32 {
 // of indicating that a function yields a result, or when called
 // it is entered with parameters.
 
+struct Planet {
+    i32 mass;
+    i32 radius;
+}
+
 // Main is a unique function, and is the entry point of the program.
 // Only one such main may exist in a program.
 fn main :: u8 {
@@ -27,9 +32,24 @@ fn main :: u8 {
 
   std.iostream.println::<some_array_sum>;
 
-  if (some_array_sum == 503) {
-    return 0;
-  } else {
+  if (some_array_sum != 503) {
     return 1;
   }
+
+  Planet planet_stack = Planet{mass: 100, radius: 10};
+
+  Planet* planet_heap = std.mem.alloc::<Planet>;
+  defer std.mem.free::<planet_heap>;
+
+  planet_heap.mass = 100;
+  planet_heap.radius = 10;
+
+  return 0;
+}
+
+test sum :: u8 {
+  // Where asset_eq! is a macro that compares two values
+  // and returns 0 if they are equal, and 1 if they are not.
+  assert_eq!(sum::<1, 3>, 4);
+  assert_eq!(sum::<241, 262>, 503);
 }
