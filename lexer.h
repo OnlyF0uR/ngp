@@ -19,10 +19,14 @@ const char* token_type_to_str(TokenType type);
 typedef struct {
     TokenType type;
     char* value;
+    size_t line;
+    size_t column;
+    char* filename;
 } Token;
 
 // Function declarations
 Token** tokenize(const char* input_str, size_t* token_count);
+void tokenize_line(const char* line, size_t line_number, const char* filename, Token*** buffer, size_t* token_count);
 void print_tokens(Token** tokens, size_t token_count, TokenType* token_type);
 void free_tokens(Token** tokens, size_t token_count);
 

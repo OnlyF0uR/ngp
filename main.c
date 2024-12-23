@@ -7,42 +7,42 @@
 #include <stdlib.h>
 #include <string.h>
 
-char* read_file_fseek(const char* filename) {
+void handle_file_read(const char* filename, Token*** tokens, size_t* token_count) {
     FILE* file = fopen(filename, "r");
     if (file == NULL) {
-        return NULL;
+        return;
     }
 
-    // Get file size
-    fseek(file, 0, SEEK_END);
-    long file_size = ftell(file);
-    fseek(file, 0, SEEK_SET);
+    char buffer[1024];
+    int line_number = 1;
 
-    // Allocate memory for string (+1 for null terminator)
-    char* buffer = (char*)malloc(file_size + 1);
-    if (buffer == NULL) {
-        fclose(file);
-        return NULL;
+    while (fgets(buffer, sizeof(buffer), file)) {
+        // Remove trailing newline if present
+        size_t len = strlen(buffer);
+        if (len > 0 && buffer[len-1] == '\n') {
+            buffer[len-1] = '\0';
+        }
+
+        // Log the line
+        // printf("Line %d: %s\n", line_number++, buffer);
+
+        tokenize_line(buffer, line_number, filename, tokens, token_count);
+        line_number++;
     }
-
-    // Read file content
-    size_t read_size = fread(buffer, 1, file_size, file);
-    buffer[read_size] = '\0';  // Add null terminator
 
     fclose(file);
-    return buffer;
 }
 
 int main() {
-    const char* code = read_file_fseek("example.ngp");
-
+    Token** buffer = NULL;
     size_t token_count;
-    Token** token_arr = tokenize(code, &token_count);
 
-    TokenType token_type = T_UNKNOWN;
-    print_tokens(token_arr, token_count, &token_type); // Print all unknown tokens, use NULL for all tokens
+    handle_file_read("example.ngc", &buffer, &token_count);
 
-    free_tokens(token_arr, token_count);
+    // TokenType token_type = T_UNKNOWN;
+    print_tokens(buffer, token_count, NULL); // Print all unknown tokens, use NULL for all tokens
+
+    free_tokens(buffer, token_count);
 
     return 0;
 }

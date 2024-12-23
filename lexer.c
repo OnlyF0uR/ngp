@@ -19,79 +19,91 @@ const char* token_type_to_str(TokenType type) {
 }
 
 char* strndup(const char* str, size_t n) {
-    // Find the length to duplicate, the smaller of n or the string's length
     size_t len = 0;
     while (len < n && str[len] != '\0') {
         len++;
     }
 
-    // Allocate memory for the new string (+1 for null terminator)
     char* result = (char*)malloc(len + 1);
     if (!result) {
-        return NULL; // Return NULL if memory allocation fails
+        return NULL;
     }
 
-    // Copy up to len characters
     for (size_t i = 0; i < len; i++) {
         result[i] = str[i];
     }
 
-    // Null-terminate the string
     result[len] = '\0';
-
     return result;
 }
 
-Token* make_token(TokenType type, const char* value) {
+Token* make_token(TokenType type, const char* value, size_t line, size_t column, const char* filename) {
     Token* token = (Token*)malloc(sizeof(Token));
     token->type = type;
     token->value = _strdup(value);
-
+    token->line = line;
+    token->column = column;
+    token->filename = _strdup(filename);
     return token;
 }
 
 void free_token(Token* token) {
     if (token) {
         free(token->value);
+        free(token->filename);
         free(token);
     }
 }
 
-void add_token(Token*** tokens, size_t* token_count, TokenType type, const char* value) {
-    Token* token = make_token(type, value);
+void add_token(Token*** tokens, size_t* token_count, TokenType type, const char* value, size_t line, size_t column, const char* filename) {
+    Token* token = make_token(type, value, line, column, filename);
     *tokens = (Token**)realloc(*tokens, (*token_count + 1) * sizeof(Token*));
     (*tokens)[*token_count] = token;
     (*token_count)++;
+
+    // printf("Token Type: %s, Value: '%s', Line: %zu, Column: %zu, Filename: %s\n",
+    //        token_type_to_str(type), value, line, column, filename);
 }
 
-Token** tokenize(const char* input_str, size_t* token_count) {
-    *token_count = 0;
-    Token** tokens = NULL;
+void tokenize_line(const char* line, size_t line_number, const char* filename, Token*** buffer, size_t* token_count) {
+    if (line == NULL) {
+        printf("Line is NULL\n");
+        return;
+    }
 
-    size_t len = strlen(input_str);
+    if (filename == NULL) {
+        printf("Filename is NULL\n");
+        return;
+    }
+
+    if (*buffer == NULL) {
+        *buffer = (Token**)malloc(sizeof(Token*));
+        *token_count = 0;
+    }
+
+    size_t len = strlen(line);
+    size_t column = 1;
     for (size_t i = 0; i < len; i++) {
-        if (isspace(input_str[i])) {
-            continue; // Skip whitespace
+        column++;
+        if (isspace(line[i])) {
+            continue;
         }
 
-        // TODO: Add all tokens
-        if (isalpha(input_str[i])) {
-            // Parse an identifier
+        if (isalpha(line[i])) {
             size_t start = i;
-            while (i < len && (isalnum(input_str[i]) || input_str[i] == '_')) {
+            while (i < len && (isalnum(line[i]) || line[i] == '_')) {
                 i++;
             }
-            char* identifier = strndup(input_str + start, i - start);
+            char* identifier = strndup(line + start, i - start);
             if (identifier == NULL) {
                 continue;
             }
 
-            // So if this is pub, fn, i32, u8, or return, it's a keyword
             if (strcmp(identifier, "pub") == 0 ||
                 strcmp(identifier, "fn") == 0 ||
                 strcmp(identifier, "return") == 0
             ) {
-                add_token(&tokens, token_count, T_KEYWORD, identifier);
+                add_token(buffer, token_count, T_KEYWORD, identifier, line_number, column, filename);
             } else if (strcmp(identifier, "u8") == 0 ||
                 strcmp(identifier, "u16") == 0 ||
                 strcmp(identifier, "u32") == 0 ||
@@ -106,52 +118,46 @@ Token** tokenize(const char* input_str, size_t* token_count) {
                 strcmp(identifier, "f64") == 0 ||
                 strcmp(identifier, "bool") == 0
             ) {
-                add_token(&tokens, token_count, T_TYPE, identifier);
+                add_token(buffer, token_count, T_TYPE, identifier, line_number, column, filename);
             } else {
-                add_token(&tokens, token_count, T_IDENTIFIER, identifier);
+                add_token(buffer, token_count, T_IDENTIFIER, identifier, line_number, column, filename);
             }
 
             free(identifier);
-            i--; // Adjust for the loop increment
-        } else if (isdigit(input_str[i])) {
-            // Parse a number
+            i--;
+        } else if (isdigit(line[i])) {
             size_t start = i;
-            while (i < len && isdigit(input_str[i])) {
+            while (i < len && isdigit(line[i])) {
                 i++;
             }
 
-            char* number = strndup(input_str + start, i - start);
+            char* number = strndup(line + start, i - start);
             if (number == NULL) {
                 i--;
                 continue;
             }
 
-            add_token(&tokens, token_count, T_NUMBER, number);
+            add_token(buffer, token_count, T_NUMBER, number, line_number, column, filename);
             free(number);
-            i--; // Adjust for the loop increment
-        } else if (strchr("+-*/=", input_str[i])) {
-            // Check for comments
-            if (input_str[i] == '/' && i + 1 < len && input_str[i + 1] == '/') {
-                while (i < len && input_str[i] != '\n') {
+            i--;
+        } else if (strchr("+-*/=", line[i])) {
+            if (line[i] == '/' && i + 1 < len && line[i + 1] == '/') {
+                while (i < len && line[i] != '\n') {
                     i++;
                 }
-                i--; // Adjust for the loop increment
+                i--;
             } else {
-                // Parse an operator
-                char operator[2] = {input_str[i], '\0'};
-                add_token(&tokens, token_count, T_OPERATOR, operator);
+                char operator[2] = {line[i], '\0'};
+                add_token(buffer, token_count, T_OPERATOR, operator, line_number, column, filename);
             }
-        } else if (strchr(";,.()[]{}:<>#", input_str[i])) {
-            char operator[2] = {input_str[i], '\0'};
-            add_token(&tokens, token_count, T_PUNCTUATION, operator);
+        } else if (strchr("{}()[];,", line[i])) {
+           char punct[2] = {line[i], '\0'};
+           add_token(buffer, token_count, T_PUNCTUATION, punct, line_number, column, filename);
         } else {
-            // Unknown token
-            char unknown[2] = {input_str[i], '\0'};
-            add_token(&tokens, token_count, T_UNKNOWN, unknown);
+            char unknown[2] = {line[i], '\0'};
+            add_token(buffer, token_count, T_UNKNOWN, unknown, line_number, column, filename);
         }
     }
-
-    return tokens;
 }
 
 void free_tokens(Token** tokens, size_t token_count) {
@@ -162,7 +168,8 @@ void free_tokens(Token** tokens, size_t token_count) {
 }
 
 void print_token(Token* token) {
-    printf("Token Type: %s, Value: '%s'\n", token_type_to_str(token->type), token->value);
+    printf("Token Type: %s, Value: '%s', Line: %zu, Column: %zu, Filename: %s\n",
+           token_type_to_str(token->type), token->value, token->line, token->column, token->filename);
 }
 
 void print_tokens(Token** tokens, size_t token_count, TokenType* token_type) {
@@ -170,7 +177,6 @@ void print_tokens(Token** tokens, size_t token_count, TokenType* token_type) {
         if (token_type != NULL && tokens[i]->type != *token_type) {
             continue;
         }
-
         print_token(tokens[i]);
     }
 }
