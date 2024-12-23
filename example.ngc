@@ -1,4 +1,4 @@
-import std.iostream.println;
+use std;
 
 // Functions can be pub or private (absence of pub keyword)
 // Public functions can be imported, private functions cannot.

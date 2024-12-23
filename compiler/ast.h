@@ -86,7 +86,9 @@ struct ASTNode {
         struct {
             char* name;         // Function name
             char** param_names; // Parameter names
+            char** param_types; // Parameter types
             size_t param_count; // Number of parameters
+            char** return_type; // Return type
             ASTNode* body;      // Function body
         } function_def;
 
@@ -154,7 +156,7 @@ ASTNode* create_variable_node(const char* name);
 ASTNode* create_binary_op_node(BinaryOperator op, ASTNode* left, ASTNode* right);
 ASTNode* create_unary_op_node(UnaryOperator op, ASTNode* operand);
 ASTNode* create_function_call_node(const char* name, ASTNode** args, size_t arg_count);
-ASTNode* create_function_def_node(const char* name, char** param_names, size_t param_count, ASTNode* body);
+ASTNode* create_function_def_node(const char* name, char** param_names, char** param_types, size_t param_count, char** return_type, ASTNode* body);
 ASTNode* create_block_node(ASTNode** statements, size_t statement_count);
 ASTNode* create_if_node(ASTNode* condition, ASTNode* then_branch, ASTNode* else_branch);
 ASTNode* create_while_node(ASTNode* condition, ASTNode* body);

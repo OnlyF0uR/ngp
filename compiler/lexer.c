@@ -232,7 +232,7 @@ void tokenize_line(const char* line, size_t line_number, const char* filename, T
                 add_token(buffer, token_count, T_TYPE, identifier, line_number, column, filename);
             } else {
                 // If it starts with import read until ; and add as a single token
-                if (strcmp(identifier, "import") == 0) {
+                if (strcmp(identifier, "use") == 0) {
                     size_t start = i;
                     while (i < len && line[i] != ';') {
                         i++;
@@ -301,7 +301,7 @@ void tokenize_line(const char* line, size_t line_number, const char* filename, T
                     i++;
                 }
 
-                // Add comments too
+                // Add comments
                 // char* comment = strndup(line + start, i - start);
                 // if (comment == NULL) {
                 //     i--;

@@ -1,3 +1,5 @@
+#include "lexer.h"
+#include "utils.h"
 #ifdef _MSC_VER
 #define _CRT_SECURE_NO_WARNINGS
 #endif
@@ -25,7 +27,8 @@ Parser* create_parser(Token** tokens, size_t token_count) {
 void free_parser(Parser* parser) {
     // NOTE: Tokens should be freed seperately
     // see lexer.h free_tokens function
-    free(parser->tokens);
+    free_ast_node(parser->ast_root);
+    free(parser);
 }
 
 Token* current_token(Parser* parser) {
@@ -33,30 +36,149 @@ Token* current_token(Parser* parser) {
     return parser->tokens[parser->current];
 }
 
-Token* match(Parser* parser, TokenType type) {
-    if (parser->current < parser->token_count && parser->tokens[parser->current]->type == type) {
-        return parser->tokens[parser->current++];
-    }
-    return NULL;
-}
-
 void error(Parser* parser, const char* message) {
     Token* token = current_token(parser);
     if (token) {
-        fprintf(stderr, "Error at %s:%zu:%zu: %s (got %s)\n",
+        fprintf(stderr, "\033[31mError: %s:%zu:%zu\n\t %s.\n\033[0m",
                 token->filename, token->line, token->column,
-                message, token_type_to_str(token->type));
+                message);
     } else {
-        fprintf(stderr, "Error: %s at end of input\n", message);
+        fprintf(stderr, "\033[31mError: %s at end of input.\n\033[0m", message);
     }
     exit(1);
 }
 
-ASTNode* parse_statement(Parser* parser) {
-    // Token* token = parser->tokens[parser->current];
-
-    // TODO: This
+Token* next_token(Parser* parser) {
+    if (parser->current + 1 >= parser->token_count) {
+        error(parser, "Unexpected end of input");
+    };
     parser->current++;
+    return parser->tokens[parser->current];
+}
+
+Token* peak_token(Parser* parser) {
+    if (parser->current + 1 >= parser->token_count) {
+        error(parser, "Unexpected end of input");
+    };
+    return parser->tokens[parser->current + 1];
+}
+
+
+ASTNode* parse_function(Parser* parser, int is_public) {
+    // The next token should be an identifier, namely the name of the function
+    Token* name = next_token(parser);
+    if (name->type != T_IDENTIFIER) {
+        error(parser, "Expected identifier after fn keyword");
+    }
+
+    // Set one for the param names and one for the types but set to NULL because we may have none
+    char** param_names = NULL;
+    char** param_types = NULL;
+
+    // Then if the next is < we expect params
+    Token* next = next_token(parser);
+    if (next->type == T_L_ANGLE_BRACKET) {
+        // Parse the parameters
+        size_t param_count = 0;
+        param_names = malloc(sizeof(char*) * 8);
+        param_types = malloc(sizeof(char*) * 8);
+
+        // Loop through the parameters un til we get the closing >
+        while (1) {
+            Token* param_type = next_token(parser);
+            if (param_type->type != T_TYPE) {
+                // Add the used value in the message
+                char* message = malloc(strlen("Expected valid type as return type, got ") + strlen(param_type->value) + 1);
+                if (message == NULL) {
+                    error(parser, "Out of memory");
+                }
+                sprintf(message, "Expected valid type as return type, got %s", param_type->value);
+                error(parser, message);
+            }
+
+            Token* param_name = next_token(parser);
+            if (param_name->type != T_IDENTIFIER) {
+                error(parser, "Expected identifier as parameter name");
+            }
+
+            param_names[param_count] = strdup_c(param_name->value);
+            param_types[param_count] = strdup_c(param_type->value);
+            param_count++;
+
+            Token* comma_or_close = next_token(parser);
+            if (comma_or_close->type == T_COMMA) {
+                continue;
+            } else if (comma_or_close->type == T_R_ANGLE_BRACKET) {
+                break;
+            } else {
+                error(parser, "Expected ',' or '>' to add more parameters, or close the parameter list");
+            }
+        }
+
+        // Now we expect the double colon
+        Token* double_colon = next_token(parser);
+        if (double_colon->type != T_DOUBLE_COLON) {
+            error(parser, "Expected '::' after function parameters");
+        }
+
+        // Now we expect the return type
+        Token* return_type = next_token(parser);
+        if (return_type->type != T_TYPE) {
+            // Add the used value in the message
+            char* message = malloc(strlen("Expected valid type as return type, got ") + strlen(return_type->value) + 1);
+            if (message == NULL) {
+                error(parser, "Out of memory");
+            }
+            sprintf(message, "Expected valid type as return type, got %s", return_type->value);
+            error(parser, message);
+        }
+
+        // Now we expect the opening brace
+        Token* open_brace = next_token(parser);
+        if (open_brace->type != T_L_BRACE) {
+            error(parser, "Expected '{' after function declaration");
+        }
+
+        while (1) {
+            Token* token = current_token(parser);
+            if (token->type == T_R_BRACE) {
+                break;
+            }
+
+            // TODO: This
+
+            error(parser, "COMPILER FUNCTIONALITY FOR THIS SECTION IS NOT YET IMPLEMENTED");
+        }
+    }
+
+    return NULL;
+}
+
+ASTNode* parse_statement(Parser* parser) {
+    Token* token = parser->tokens[parser->current];
+
+    // If we are importing something
+    if (token->type == T_KEYWORD) {
+        // If this is pub then we expect a fn keyword next
+        if (strcmp(token->value, "pub") == 0) {
+            // Get the next token
+            Token* next = next_token(parser);
+            if (next->type != T_KEYWORD ||
+                strcmp(next->value, "fn") != 0
+            ) {
+                error(parser, "Expected fn keyword after pub");
+            }
+
+            return parse_function(parser, 1);
+        }
+        else if (strcmp(token->value, "fn") == 0) {
+            return parse_function(parser, 0);
+        }
+    }
+    else {
+        // error(parser, "Expected keyword or import statement");
+        parser->current++;
+    }
 
     return NULL;
 }

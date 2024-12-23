@@ -71,12 +71,14 @@ ASTNode* create_function_call_node(const char* name, ASTNode** args, size_t arg_
     return node;
 }
 
-ASTNode* create_function_def_node(const char* name, char** param_names, size_t param_count, ASTNode* body) {
+ASTNode* create_function_def_node(const char* name, char** param_names, char** param_types, size_t param_count, char** return_type, ASTNode* body) {
     ASTNode* node = malloc(sizeof(ASTNode));
     node->type = AST_FUNCTION_DEF;
     node->function_def.name = strdup_c(name);
     node->function_def.param_names = param_names;
+    node->function_def.param_types = param_types;
     node->function_def.param_count = param_count;
+    node->function_def.return_type = return_type;
     node->function_def.body = body;
     return node;
 }
