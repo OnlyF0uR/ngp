@@ -39,6 +39,7 @@ const char* token_type_to_str(TokenType type) {
         case T_COLON: return "Colon";
         case T_HASH_SIGN: return "Hash Sign";
         case T_IMPORT: return "Import";
+        case T_ANNOTATION: return "Annotation";
         case T_UNKNOWN: return "Unknown";
         default: return "Invalid";
     }
@@ -358,7 +359,32 @@ void tokenize_line(const char* line, size_t line_number, const char* filename, T
         } else if (line[i] == ':') {
             add_token(buffer, token_count, T_COLON, ":", line_number, column, filename);
         } else if (line[i] == '#') {
-            add_token(buffer, token_count, T_HASH_SIGN, "#", line_number, column, filename);
+            // If the next token is a [ this is an annotation, in that case we need to
+            // read until the next ] and add as a single token
+            // Otherwise this is a hash sign
+
+            size_t next_pos = i + 1;
+            while (next_pos < len && isspace(line[next_pos])) {
+                next_pos++;
+            }
+
+            if (next_pos < len && line[next_pos] == '[') {
+                size_t start = i;
+                while (i < len && line[i] != ']') {
+                    i++;
+                }
+
+                char* annotation = strndup(line + start + 2, i - start - 2);
+                if (annotation == NULL) {
+                    continue;
+                }
+                i++;
+
+                add_token(buffer, token_count, T_ANNOTATION, annotation, line_number, column, filename);
+                free(annotation);
+            } else {
+                add_token(buffer, token_count, T_HASH_SIGN, "#", line_number, column, filename);
+            }
         } else {
             char unknown[2] = {line[i], '\0'};
             add_token(buffer, token_count, T_UNKNOWN, unknown, line_number, column, filename);

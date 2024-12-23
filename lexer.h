@@ -30,6 +30,7 @@ typedef enum {
     T_COLON,
     T_HASH_SIGN,
     T_IMPORT,
+    T_ANNOTATION,
     T_UNKNOWN
 } TokenType;
 

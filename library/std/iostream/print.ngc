@@ -1,4 +1,4 @@
-pub fn sum <i32 number1> {
-    #[external(core.print_i32)]
-    print_i32::<number1>;
+pub fn print_i32 <i32 number1> {
+    #[external(libc)]
+    printf::<"%n", number1>;
 }
