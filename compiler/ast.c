@@ -31,6 +31,23 @@ char* unary_op_to_str(UnaryOperator op) {
     }
 }
 
+ASTNode* create_variable_def_node(const char* name, const char* type, ASTNode* initializer) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = AST_VARIABLE_DEF;
+    node->variable_def.name = strdup_c(name);
+    node->variable_def.type = strdup_c(type);
+    node->variable_def.initializer = initializer;
+    return node;
+}
+
+ASTNode* create_variable_assignment_node(const char* name, ASTNode* value) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = AST_VARIABLE_ASSIGNMENT;
+    node->variable_assignment.name = strdup_c(name);
+    node->variable_assignment.value = value;
+    return node;
+}
+
 ASTNode* create_literal_node(const char* value) {
     ASTNode* node = malloc(sizeof(ASTNode));
     node->type = AST_LITERAL;
@@ -38,10 +55,10 @@ ASTNode* create_literal_node(const char* value) {
     return node;
 }
 
-ASTNode* create_variable_node(const char* name) {
+ASTNode* create_reference_node(const char* name) {
     ASTNode* node = malloc(sizeof(ASTNode));
-    node->type = AST_VARIABLE;
-    node->variable.name = strdup_c(name);
+    node->type = AST_REFERENCE;
+    node->reference.name = strdup_c(name);
     return node;
 }
 
@@ -71,7 +88,7 @@ ASTNode* create_function_call_node(const char* name, ASTNode** args, size_t arg_
     return node;
 }
 
-ASTNode* create_function_def_node(const char* name, char** param_names, char** param_types, size_t param_count, char** return_type, ASTNode* body) {
+ASTNode* create_function_def_node(const char* name, char** param_names, char** param_types, size_t param_count, char* return_type, ASTNode* body) {
     ASTNode* node = malloc(sizeof(ASTNode));
     node->type = AST_FUNCTION_DEF;
     node->function_def.name = strdup_c(name);
@@ -163,11 +180,20 @@ void free_ast_node(ASTNode* node) {
     }
 
     switch (node->type) {
+        case AST_VARIABLE_DEF:
+            free(node->variable_def.name);
+            free(node->variable_def.type);
+            free_ast_node(node->variable_def.initializer);
+            break;
+        case AST_VARIABLE_ASSIGNMENT:
+            free(node->variable_assignment.name);
+            free_ast_node(node->variable_assignment.value);
+            break;
         case AST_LITERAL:
             free(node->literal.value);
             break;
-        case AST_VARIABLE:
-            free(node->variable.name);
+        case AST_REFERENCE:
+            free(node->reference.name);
             break;
         case AST_BINARY_OP:
             free_ast_node(node->binary_op.left);
@@ -246,11 +272,19 @@ void print_ast_node(ASTNode* node, size_t indent) {
     }
 
     switch (node->type) {
+        case AST_VARIABLE_DEF:
+            printf("%*sVariable Def: %s %s\n", (int)indent, "", node->variable_def.name, node->variable_def.type);
+            print_ast_node(node->variable_def.initializer, indent + 2);
+            break;
+        case AST_VARIABLE_ASSIGNMENT:
+            printf("%*sVariable Assignment: %s\n", (int)indent, "", node->variable_assignment.name);
+            print_ast_node(node->variable_assignment.value, indent + 2);
+            break;
         case AST_LITERAL:
             printf("%*sLiteral: %s\n", (int)indent, "", node->literal.value);
             break;
-        case AST_VARIABLE:
-            printf("%*sVariable: %s\n", (int)indent, "", node->variable.name);
+        case AST_REFERENCE:
+            printf("%*sReference: %s\n", (int)indent, "", node->reference.name);
             break;
         case AST_BINARY_OP:
             printf("%*sBinary Op: %s\n", (int)indent, "", binary_op_to_str(node->binary_op.op));

@@ -5,8 +5,11 @@
 
 // Enum to represent the type of an AST node
 typedef enum {
-    AST_LITERAL,      // Literal values (numbers, strings, etc.)
-    AST_VARIABLE,     // Variable reference
+    AST_VARIABLE_DEF, // Variable definition
+    AST_VARIABLE_ASSIGNMENT, // Variable assignment
+    AST_LITERAL,      // Constant literal values (numbers, strings, etc.)
+    AST_REFERENCE,     // Variable values (number, string, etc.)
+
     AST_BINARY_OP,    // Binary operation (e.g., +, -, *)
     AST_UNARY_OP,     // Unary operation (e.g., -, !)
     AST_FUNCTION_CALL,// Function call
@@ -52,6 +55,19 @@ typedef struct ASTNode ASTNode;
 struct ASTNode {
     ASTNodeType type;     // Type of the AST node
     union {
+        // Variable definition (AST_VARIABLE_DEF)
+        struct {
+            char* name;       // Variable name
+            char* type;       // Variable type
+            ASTNode* initializer;   // Initial value (optional)
+        } variable_def;
+
+        // Variable assignment (AST_VARIABLE_ASSIGNMENT)
+        struct {
+            char* name;       // Variable name
+            ASTNode* value;   // Assigned value
+        } variable_assignment;
+
         // Literal value (AST_LITERAL)
         struct {
             char* value; // Literal value as a string
@@ -60,7 +76,7 @@ struct ASTNode {
         // Variable reference (AST_VARIABLE)
         struct {
             char* name;  // Variable name
-        } variable;
+        } reference;
 
         // Binary operation (AST_BINARY_OP)
         struct {
@@ -88,7 +104,7 @@ struct ASTNode {
             char** param_names; // Parameter names
             char** param_types; // Parameter types
             size_t param_count; // Number of parameters
-            char** return_type; // Return type
+            char* return_type; // Return type
             ASTNode* body;      // Function body
         } function_def;
 
@@ -151,12 +167,14 @@ struct ASTNode {
 };
 
 // Function declarations
+ASTNode* create_variable_def_node(const char* name, const char* type, ASTNode* initializer);
+ASTNode* create_variable_assignment_node(const char* name, ASTNode* value);
 ASTNode* create_literal_node(const char* value);
 ASTNode* create_variable_node(const char* name);
 ASTNode* create_binary_op_node(BinaryOperator op, ASTNode* left, ASTNode* right);
 ASTNode* create_unary_op_node(UnaryOperator op, ASTNode* operand);
 ASTNode* create_function_call_node(const char* name, ASTNode** args, size_t arg_count);
-ASTNode* create_function_def_node(const char* name, char** param_names, char** param_types, size_t param_count, char** return_type, ASTNode* body);
+ASTNode* create_function_def_node(const char* name, char** param_names, char** param_types, size_t param_count, char* return_type, ASTNode* body);
 ASTNode* create_block_node(ASTNode** statements, size_t statement_count);
 ASTNode* create_if_node(ASTNode* condition, ASTNode* then_branch, ASTNode* else_branch);
 ASTNode* create_while_node(ASTNode* condition, ASTNode* body);

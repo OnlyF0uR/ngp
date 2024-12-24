@@ -139,16 +139,70 @@ ASTNode* parse_function(Parser* parser, int is_public) {
             error(parser, "Expected '{' after function declaration");
         }
 
+        ASTNode** body_statements = NULL;
+        size_t body_stmt_count = 0;
+
         while (1) {
             Token* token = current_token(parser);
             if (token->type == T_R_BRACE) {
                 break;
             }
 
-            // TODO: This
+            if (token->type == T_KEYWORD) {
+                // Could be if, elif, else, return, defer etc.
 
-            error(parser, "COMPILER FUNCTIONALITY FOR THIS SECTION IS NOT YET IMPLEMENTED");
+            } else if (token->type == T_TYPE) {
+                // Then the next item has to be an identifier, namely the name of the variable
+                Token* variable_name = next_token(parser);
+                if (variable_name->type != T_IDENTIFIER) {
+                    error(parser, "Expected identifier after type declaration");
+                }
+
+                ASTNode* initializer = NULL;
+
+                // Lets peak at the next token, if that is an equal sign we have a direct assignment
+                Token* equal_or_semicolon = next_token(parser);
+                if (equal_or_semicolon->type == T_EQUAL_SIGN) {
+                    // The next token is the type
+                    Token* value = next_token(parser);
+                    // Now this can be a literal, a reference, a function call, or whatever some other expression
+                    if (value->type == T_NUMBER) {
+                        // TODO: This could be a mathematical expression
+                        initializer = create_literal_node(value->value);
+                    } else if (value->type == T_STRING) {
+                        // TODO: String concatenation hello?
+                        initializer = create_literal_node(value->value);
+                    } else if (value->type == T_IDENTIFIER) {
+                        // TODO: This could be a reference to another variable, a function call, or a struct name
+                    } else {
+                        error(parser, "Expected literal or reference after '='");
+                    }
+                } else if (equal_or_semicolon->type != T_SEMICOLON) {
+                    error(parser, "Expected '=' or ';' after type declaration");
+                }
+
+                ASTNode* variable_def = create_variable_def_node(variable_name->value, token->value, initializer);
+                // Add to body statements
+                body_statements = realloc(body_statements, sizeof(ASTNode*) * (body_stmt_count + 1));
+                body_statements[body_stmt_count++] = variable_def;
+            } else if (token->type == T_POINTER_TYPE) {
+                // TODO: Has to be variable def
+            } else if (token->type == T_L_BRACE) {
+                // TODO: Has to be array variable def
+            } else if (token->type == T_IDENTIFIER) {
+                // TODO: Could refer to a function call (in or some namespace)
+            } else if (token->type == T_ANNOTATION) {
+                // TODO: Annotate something that is relevant for the next token
+            }
+
+            // Move to the next token
+            parser->current++;
         }
+
+        ASTNode* function_block = create_block_node(body_statements, body_stmt_count);
+
+        // Now we should have all the info we need to create the function node
+        return create_function_def_node(name->value, param_names, param_types, param_count, return_type->value, function_block);
     }
 
     return NULL;
@@ -192,6 +246,8 @@ void run_parser(Parser* parser) {
         if (statement) {
             statements[count++] = statement;
         }
+
+        parser->current++;
     }
 
     if (count > 0) {
