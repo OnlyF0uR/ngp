@@ -63,6 +63,448 @@ Token* peak_token(Parser* parser) {
     return parser->tokens[parser->current + 1];
 }
 
+// This function parses a reference
+// Note that the function must be called PRIOR to
+// moving the parser's cursor to the identifier that marks the beginning
+// of a reference sequence.
+// A reference serves as anything that represents a declaration of a variable in response to
+// a implicit or explicit type declaration. (Thus variable assignments, return statements, param assignments, defer statements, etc.)
+ASTNode* parse_reference(Parser* parser, int is_tracking_function_args) {
+    ASTNode* buffer = NULL;
+    char* last_ref_name = NULL;
+
+    while (1) {
+        Token* next = next_token(parser);
+
+        if (is_tracking_function_args == 1) {
+            if (next->type == T_R_PAREN) {
+                return buffer;
+            } else if (next->type == T_COMMA) {
+                continue;
+            } else if (next->type == T_SEMICOLON) {
+                return buffer;
+            }
+        }
+
+        // If the next token is a ; we know we are done processing
+        if (next->type == T_L_PAREN) {
+            ASTNode** args = NULL;
+            size_t arg_count = 0;
+
+            while (1) {
+                Token* next = next_token(parser);
+                if (next->type == T_R_PAREN) {
+                    break;
+                }
+
+                // TODO: Parse the function parameters
+
+                parser->current++;
+            }
+
+            if (buffer == NULL) {
+                buffer = create_function_call_node(last_ref_name, args, arg_count);
+            } else {
+                ASTNode* current = buffer; // Create a temporary buffer
+                while (current->reference.child != NULL) {
+                    current = current->reference.child;
+
+                    // If the current child is NULL we need to add the new child to the current child
+                    if (current == NULL) {
+                        current->reference.child = create_function_call_node(last_ref_name, args, arg_count);
+                        break;
+                    }
+                }
+            }
+        } else if (next->type == T_DOT) {
+            continue;
+        } else if (next->type == T_IDENTIFIER) {
+            if (buffer == NULL) {
+                buffer = create_reference_node(next->value);
+                last_ref_name = next->value;
+            } else {
+                // We know for a matter of fact that this is a reference to some earlier reference
+                ASTNode* current = buffer; // Create a temporary buffer
+                while (current->reference.child != NULL) {
+                    current = current->reference.child;
+
+                    // If the current child is NULL we need to add the new child to the current child
+                    if (current == NULL) {
+                        current->reference.child = create_reference_node(next->value);
+                        last_ref_name = next->value;
+                        break;
+                    }
+                }
+            }
+        } else if (next->type == T_HASH_SIGN) {
+            // This is an array reference
+            Token* index = next_token(parser);
+            if (index->type != T_NUMBER) {
+                error(parser, "Expected number after '#' in array reference");
+            }
+
+            ASTNode* index_value_node = create_literal_node(index->value);
+
+            if (buffer == NULL) {
+                // Since the buffer is still NULL this must be the first reference
+                // thus ref_name is the name of the array
+                buffer = create_array_access_node(last_ref_name, index_value_node);
+            } else {
+                // In this case the array is the child of some other reference
+                ASTNode* current = buffer; // Create a temporary buffer
+                while (current->reference.child != NULL) {
+                    current = current->reference.child;
+                    if (current == NULL) {
+                        // We must deal with double array access (some_array#1#0)
+                        // However, AST_ARRAY_ACCESS has a child field so we
+                        // can add the anonymous array access to that as a child
+                        // In other cases where this for instance would be a struct we just add
+                        // this to a actual reference node
+                        buffer->reference.child = create_array_access_node(last_ref_name, index_value_node);
+                        break;
+                    }
+                }
+            }
+        }
+        else if (next->type == T_OPERATOR) {
+            // Handle binary operation
+            char* operator = next->value;
+
+            // Parse the right-hand side reference
+            ASTNode* right = parse_reference(parser, 0);
+            if (right == NULL) {
+                error(parser, "Expected a valid right-hand side after operator");
+            }
+
+            // Create a binary operation node
+            ASTNode* binary_op = create_binary_op_node(str_to_binary_op(operator), buffer, right);
+            // We return here, partly because the parsing of the right hand sided already caused
+            // the cursor to move to the ;
+
+            // Compensate for the cursor
+            parser->current--;
+            buffer = binary_op;
+
+            // return binary_op;
+        }
+        else if (next->type == T_NUMBER || next->type == T_STRING) {
+            // This is a literal
+            ASTNode* literal = create_literal_node(next->value);
+            if (buffer == NULL) {
+                buffer = literal;
+            } else {
+                ASTNode* current = buffer; // Create a temporary buffer
+                while (current->reference.child != NULL) {
+                    current = current->reference.child;
+
+                    // If the current child is NULL we need to add the new child to the current child
+                    if (current == NULL) {
+                        current->reference.child = literal;
+                        break;
+                    }
+                }
+            }
+        }
+        else if (next->type == T_L_BRACKET) {
+            // This is an array initializer [1, 2, 3]
+            ASTNode** array_values = NULL;
+            size_t array_value_count = 0;
+
+            while (1) {
+                Token* array_value = next_token(parser);
+                if (array_value->type == T_NUMBER || array_value->type == T_STRING) {
+                    array_values = realloc(array_values, sizeof(ASTNode*) * (array_value_count + 1));
+                    if (array_values == NULL) {
+                        error(parser, "Out of memory");
+                    }
+
+                    array_values[array_value_count] = create_literal_node(array_value->value);
+                    array_value_count++;
+                } else if (array_value->type == T_COMMA) {
+                    continue;
+                } else if (array_value->type == T_R_BRACKET) {
+                    break;
+                } else {
+                    printf("Token type: %s\n", parser->tokens[parser->current]->value);
+                    error(parser, "Expected number or ']' in array initializer");
+                }
+            }
+
+            ASTNode* literal_array = create_literal_array_node(array_values, array_value_count);
+            if (buffer == NULL) {
+                buffer = literal_array;
+            } else {
+                ASTNode* current = buffer; // Create a temporary buffer
+                while (current->reference.child != NULL) {
+                    current = current->reference.child;
+
+                    // If the current child is NULL we need to add the new child to the current child
+                    if (current == NULL) {
+                        current->reference.child = literal_array;
+                        break;
+                    }
+                }
+            }
+        }
+        else if (next->type == T_SEMICOLON) {
+            if (buffer == NULL) {
+                error(parser, "A reference or function call is missing");
+            }
+            return buffer;
+        } else {
+            char* message = malloc(strlen("Unexpected token in reference, got ") + strlen(next->value) + 1);
+            if (message == NULL) {
+                error(parser, "Out of memory");
+            }
+            sprintf(message, "Unexpected token in reference, got %s", next->value);
+            error(parser, message);
+        }
+    }
+
+    return NULL;
+}
+
+void parse_ast_body(Parser* parser, ASTNode*** body_statements, size_t* body_stmt_count) {
+    // Move past '{'
+    parser->current++;
+
+    while (1) {
+        Token* token = current_token(parser);
+        if (token->type == T_R_BRACE) {
+            break;
+        }
+
+        if (token->type == T_KEYWORD) {
+            if (strcmp(token->value, "if") == 0) {
+                // Has to be followed by a brace
+                Token* open_brace = next_token(parser);
+                if (open_brace->type != T_L_PAREN) {
+                    error(parser, "Expected '(' after if keyword");
+                }
+
+                // TODO: Read the condition
+                // for now just loop until yu hit a closing brace
+                // DEBUG: This is a temporary solution
+                while (1) {
+                    Token* next = next_token(parser);
+                    if (next->type == T_R_PAREN) {
+                        break;
+                    }
+                }
+
+                Token* open_body_brace = next_token(parser);
+                if (open_body_brace->type != T_L_BRACE) {
+                    error(parser, "Expected '{' after elif condition");
+                }
+
+                ASTNode** if_body_statements = NULL;
+                size_t if_body_stmt_count = 0;
+
+                parse_ast_body(parser, &if_body_statements, &if_body_stmt_count);
+            } else if (strcmp(token->value, "elif") == 0) {
+                // Has to be followed by a brace
+                Token* open_brace = next_token(parser);
+                if (open_brace->type != T_L_PAREN) {
+                    error(parser, "Expected '(' after elif keyword");
+                }
+
+                // TODO: Read the condition
+                // for now just loop until yu hit a closing brace
+                // DEBUG: This is a temporary solution
+                while (1) {
+                    Token* next = next_token(parser);
+                    if (next->type == T_R_PAREN) {
+                        break;
+                    }
+                }
+
+                Token* open_body_brace = next_token(parser);
+                if (open_body_brace->type != T_L_BRACE) {
+                    error(parser, "Expected '{' after elif condition");
+                }
+
+                ASTNode** elif_body_statements = NULL;
+                size_t elif_body_stmt_count = 0;
+
+                parse_ast_body(parser, &elif_body_statements, &elif_body_stmt_count);
+            } else if (strcmp(token->value, "else") == 0) {
+                // Has to be followed by a brace
+                Token* open_brace = next_token(parser);
+                if (open_brace->type != T_L_BRACE) {
+                    error(parser, "Expected '{' after else keyword");
+                }
+
+                Token* open_body_brace = next_token(parser);
+                if (open_body_brace->type != T_L_BRACE) {
+                    error(parser, "Expected '{' after elif condition");
+                }
+
+                ASTNode** else_body_statements = NULL;
+                size_t else_body_stmt_count = 0;
+
+                parse_ast_body(parser, &else_body_statements, &else_body_stmt_count);
+            } else if (strcmp(token->value, "return") == 0) {
+                ASTNode* ref = parse_reference(parser, 0);
+                ASTNode* return_node = create_return_node(ref);
+
+                *body_statements = realloc(*body_statements, sizeof(ASTNode*) * (*body_stmt_count + 1));
+                if (*body_statements == NULL) {
+                    error(parser, "Out of memory");
+                }
+
+                (*body_statements)[*body_stmt_count] = return_node;
+                (*body_stmt_count)++;
+            } else if (strcmp(token->value, "defer") == 0) {
+                printf("Defer\n");
+                ASTNode* ref = parse_reference(parser, 0);
+                ASTNode* return_node = create_defer_node(ref);
+
+                *body_statements = realloc(*body_statements, sizeof(ASTNode*) * (*body_stmt_count + 1));
+                if (*body_statements == NULL) {
+                    error(parser, "Out of memory");
+                }
+
+                (*body_statements)[*body_stmt_count] = return_node;
+                (*body_stmt_count)++;
+            } else {
+                error(parser, "Unexpected keyword in function body");
+            }
+        } else if (token->type == T_TYPE || token->type == T_POINTER_TYPE) {
+            // If this is the type then the next is the name
+            Token* next = next_token(parser);
+            if (next->type != T_IDENTIFIER) {
+                error(parser, "Expected identifier after type declaration");
+            }
+
+            // Then the next has to be either a semicolon or an equal sign
+            Token* equal_or_semicolon = peak_token(parser);
+            if (equal_or_semicolon->type == T_OPERATOR && strcmp(equal_or_semicolon->value, "=") == 0) {
+                // The next one would be some reference
+                ASTNode* ref = parse_reference(parser, 0);
+                ASTNode* variable_def = create_variable_def_node(next->value, token->value, ref);
+
+                *body_statements = realloc(*body_statements, sizeof(ASTNode*) * (*body_stmt_count + 1));
+                if (*body_statements == NULL) {
+                    error(parser, "Out of memory");
+                }
+
+                // Then we add the variable def to the body
+                (*body_statements)[*body_stmt_count] = variable_def;
+                (*body_stmt_count)++;
+            } else if (equal_or_semicolon->type == T_SEMICOLON) {
+                // This is just a type declaration
+                ASTNode* type_decl = create_type_decl_node(next->value, token->value);
+
+                *body_statements = realloc(*body_statements, sizeof(ASTNode*) * (*body_stmt_count + 1));
+                if (*body_statements == NULL) {
+                    error(parser, "Out of memory");
+                }
+
+                // Then we add the variable def to the body
+                (*body_statements)[*body_stmt_count] = type_decl;
+                (*body_stmt_count)++;
+            }
+        } else if (token->type == T_L_BRACKET) {
+            // If this is the type then the next is the name
+            Token* arr_type = next_token(parser);
+            if (arr_type->type != T_TYPE && arr_type->type != T_POINTER_TYPE) {
+                error(parser, "Expected identifier after type declaration");
+            }
+
+            Token* close_bracket = next_token(parser);
+            if (close_bracket->type != T_R_BRACKET) {
+                error(parser, "Expected ']' after array type declaration");
+            }
+
+            Token* next = next_token(parser);
+            if (next->type != T_IDENTIFIER) {
+                error(parser, "Expected identifier after type declaration");
+            }
+
+            // Then the next has to be either a semicolon or an equal sign
+            Token* equal_or_semicolon = peak_token(parser);
+            if (equal_or_semicolon->type == T_OPERATOR && strcmp(equal_or_semicolon->value, "=") == 0) {
+                // The next one would be some reference
+                ASTNode* ref = parse_reference(parser, 0);
+                ASTNode* variable_def = create_array_def_node(next->value, token->value, ref);
+
+                *body_statements = realloc(*body_statements, sizeof(ASTNode*) * (*body_stmt_count + 1));
+                if (*body_statements == NULL) {
+                    error(parser, "Out of memory");
+                }
+
+                // Then we add the variable def to the body
+                (*body_statements)[*body_stmt_count] = variable_def;
+                (*body_stmt_count)++;
+            } else if (equal_or_semicolon->type == T_SEMICOLON) {
+                // This is just a type declaration
+                ASTNode* type_decl = create_type_decl_node(next->value, token->value);
+
+                *body_statements = realloc(*body_statements, sizeof(ASTNode*) * (*body_stmt_count + 1));
+                if (*body_statements == NULL) {
+                    error(parser, "Out of memory");
+                }
+
+                // Then we add the variable def to the body
+                (*body_statements)[*body_stmt_count] = type_decl;
+                (*body_stmt_count)++;
+            }
+        } else if (token->type == T_IDENTIFIER) {
+            // If it is an identifier followed by an identifier we know that hte first one is a type
+            // otherwise it would be an assignment
+            Token* identifier_or_assign = next_token(parser);
+            if (identifier_or_assign->type == T_IDENTIFIER) {
+                // Then the next has to be either a semicolon or an equal sign
+                Token* equal_or_semicolon = peak_token(parser);
+                if (equal_or_semicolon->type == T_OPERATOR && strcmp(equal_or_semicolon->value, "=") == 0) {
+                    // The next one would be some reference
+                    ASTNode* ref = parse_reference(parser, 0);
+                    ASTNode* variable_def = create_variable_def_node(token->value, token->value, ref);
+
+                    *body_statements = realloc(*body_statements, sizeof(ASTNode*) * (*body_stmt_count + 1));
+                    if (*body_statements == NULL) {
+                        error(parser, "Out of memory");
+                    }
+
+                    // Then we add the variable def to the body
+                    (*body_statements)[*body_stmt_count] = variable_def;
+                    (*body_stmt_count)++;
+                } else if (equal_or_semicolon->type == T_SEMICOLON) {
+                    // This is just a type declaration
+                    ASTNode* type_decl = create_type_decl_node(token->value, token->value);
+
+                    *body_statements = realloc(*body_statements, sizeof(ASTNode*) * (*body_stmt_count + 1));
+                    if (*body_statements == NULL) {
+                        error(parser, "Out of memory");
+                    }
+
+                    // Then we add the variable def to the body
+                    (*body_statements)[*body_stmt_count] = type_decl;
+                    (*body_stmt_count)++;
+                }
+            } else if (identifier_or_assign->type == T_OPERATOR && strcmp(identifier_or_assign->value, "=") == 0) {
+                // This is a variable assignment
+                ASTNode* ref = parse_reference(parser, 0);
+                ASTNode* variable_assignment = create_variable_assignment_node(token->value, ref);
+
+                *body_statements = realloc(*body_statements, sizeof(ASTNode*) * (*body_stmt_count + 1));
+                if (*body_statements == NULL) {
+                    error(parser, "Out of memory");
+                }
+
+                // Then we add the variable def to the body
+                (*body_statements)[*body_stmt_count] = variable_assignment;
+                (*body_stmt_count)++;
+            }
+        } else if (token->type == T_ANNOTATION) {
+            // TODO: Annotate something that is relevant for the next token
+        }
+
+        // Move to the next token
+        parser->current++;
+    }
+}
+
 
 ASTNode* parse_function(Parser* parser, int is_public) {
     // The next token should be an identifier, namely the name of the function
@@ -74,16 +516,15 @@ ASTNode* parse_function(Parser* parser, int is_public) {
     // Set one for the param names and one for the types but set to NULL because we may have none
     char** param_names = NULL;
     char** param_types = NULL;
+    size_t param_count = 0;
 
     // Then if the next is < we expect params
     Token* next = next_token(parser);
     if (next->type == T_L_ANGLE_BRACKET) {
-        // Parse the parameters
-        size_t param_count = 0;
         param_names = malloc(sizeof(char*) * 8);
         param_types = malloc(sizeof(char*) * 8);
 
-        // Loop through the parameters un til we get the closing >
+        // Loop through the parameters until we get the closing
         while (1) {
             Token* param_type = next_token(parser);
             if (param_type->type != T_TYPE) {
@@ -115,101 +556,48 @@ ASTNode* parse_function(Parser* parser, int is_public) {
             }
         }
 
-        // Now we expect the double colon
-        Token* double_colon = next_token(parser);
-        if (double_colon->type != T_DOUBLE_COLON) {
-            error(parser, "Expected '::' after function parameters");
-        }
-
-        // Now we expect the return type
-        Token* return_type = next_token(parser);
-        if (return_type->type != T_TYPE) {
-            // Add the used value in the message
-            char* message = malloc(strlen("Expected valid type as return type, got ") + strlen(return_type->value) + 1);
-            if (message == NULL) {
-                error(parser, "Out of memory");
-            }
-            sprintf(message, "Expected valid type as return type, got %s", return_type->value);
-            error(parser, message);
-        }
-
-        // Now we expect the opening brace
-        Token* open_brace = next_token(parser);
-        if (open_brace->type != T_L_BRACE) {
-            error(parser, "Expected '{' after function declaration");
-        }
-
-        ASTNode** body_statements = NULL;
-        size_t body_stmt_count = 0;
-
-        while (1) {
-            Token* token = current_token(parser);
-            if (token->type == T_R_BRACE) {
-                break;
-            }
-
-            if (token->type == T_KEYWORD) {
-                // Could be if, elif, else, return, defer etc.
-
-            } else if (token->type == T_TYPE) {
-                // Then the next item has to be an identifier, namely the name of the variable
-                Token* variable_name = next_token(parser);
-                if (variable_name->type != T_IDENTIFIER) {
-                    error(parser, "Expected identifier after type declaration");
-                }
-
-                ASTNode* initializer = NULL;
-
-                // Lets peak at the next token, if that is an equal sign we have a direct assignment
-                Token* equal_or_semicolon = next_token(parser);
-                if (equal_or_semicolon->type == T_EQUAL_SIGN) {
-                    // The next token is the type
-                    Token* value = next_token(parser);
-                    // Now this can be a literal, a reference, a function call, or whatever some other expression
-                    if (value->type == T_NUMBER) {
-                        // TODO: This could be a mathematical expression
-                        initializer = create_literal_node(value->value);
-                    } else if (value->type == T_STRING) {
-                        // TODO: String concatenation hello?
-                        initializer = create_literal_node(value->value);
-                    } else if (value->type == T_IDENTIFIER) {
-                        // TODO: This could be a reference to another variable, a function call, or a struct name
-                    } else {
-                        error(parser, "Expected literal or reference after '='");
-                    }
-                } else if (equal_or_semicolon->type != T_SEMICOLON) {
-                    error(parser, "Expected '=' or ';' after type declaration");
-                }
-
-                ASTNode* variable_def = create_variable_def_node(variable_name->value, token->value, initializer);
-                // Add to body statements
-                body_statements = realloc(body_statements, sizeof(ASTNode*) * (body_stmt_count + 1));
-                body_statements[body_stmt_count++] = variable_def;
-            } else if (token->type == T_POINTER_TYPE) {
-                // TODO: Has to be variable def
-            } else if (token->type == T_L_BRACE) {
-                // TODO: Has to be array variable def
-            } else if (token->type == T_IDENTIFIER) {
-                // TODO: Could refer to a function call (in or some namespace)
-            } else if (token->type == T_ANNOTATION) {
-                // TODO: Annotate something that is relevant for the next token
-            }
-
-            // Move to the next token
-            parser->current++;
-        }
-
-        ASTNode* function_block = create_block_node(body_statements, body_stmt_count);
-
-        // Now we should have all the info we need to create the function node
-        return create_function_def_node(name->value, param_names, param_types, param_count, return_type->value, function_block);
+        next = next_token(parser);
     }
+
+    if (next->type != T_DOUBLE_COLON) {
+        char* message = malloc(strlen("Expected '::' after function parameters, got ") + strlen(next->value) + 1);
+        if (message == NULL) {
+            error(parser, "Out of memory");
+        }
+        sprintf(message, "Expected '::' after function parameters, got %s", next->value);
+        error(parser, message);
+    }
+
+    // Now we expect the return type
+    Token* return_type = next_token(parser);
+    if (return_type->type != T_TYPE) {
+        // Add the used value in the message
+        char* message = malloc(strlen("Expected valid type as return type, got ") + strlen(return_type->value) + 1);
+        if (message == NULL) {
+            error(parser, "Out of memory");
+        }
+        sprintf(message, "Expected valid type as return type, got %s", return_type->value);
+        error(parser, message);
+    }
+
+    // Now we expect the opening brace
+    Token* open_brace = next_token(parser);
+    if (open_brace->type != T_L_BRACE) {
+        error(parser, "Expected '{' after function declaration");
+    }
+
+    ASTNode** body_statements = NULL;
+    size_t body_stmt_count = 0;
+    parse_ast_body(parser, &body_statements, &body_stmt_count);
+
+    ASTNode* function_block = create_block_node(body_statements, body_stmt_count);
+    return create_function_def_node(name->value, is_public, param_names, param_types, param_count, return_type->value, function_block);
 
     return NULL;
 }
 
 ASTNode* parse_statement(Parser* parser) {
-    Token* token = parser->tokens[parser->current];
+    Token* token = current_token(parser);
 
     // If we are importing something
     if (token->type == T_KEYWORD) {
@@ -228,11 +616,27 @@ ASTNode* parse_statement(Parser* parser) {
         else if (strcmp(token->value, "fn") == 0) {
             return parse_function(parser, 0);
         }
+        else if (strcmp(token->value, "struct") == 0) {
+            // TODO: Parse struct definition
+            return NULL;
+        } else {
+            char* message = malloc(strlen("No support for this keyword: ") + strlen(token->value) + 1);
+            if (message == NULL) {
+                error(parser, "Out of memory");
+            }
+            sprintf(message, "No support for this keyword: %s", token->value);
+            error(parser, message);
+        }
     }
     else {
         // error(parser, "Expected keyword or import statement");
-        parser->current++;
+        // parser->current++;
+        // print the token
+        // printf("Token: %s\n", parser->tokens[parser->current]->value);
     }
+
+    // Move the parser past the last token of the sequence
+    parser->current++;
 
     return NULL;
 }
@@ -246,8 +650,6 @@ void run_parser(Parser* parser) {
         if (statement) {
             statements[count++] = statement;
         }
-
-        parser->current++;
     }
 
     if (count > 0) {

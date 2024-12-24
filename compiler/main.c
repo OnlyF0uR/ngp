@@ -38,7 +38,7 @@ int main() {
 
     // Handle file reading and lexer
     handle_file_read("example.ngc", &buffer, &token_count);
-    // print_tokens(buffer, token_count, NULL);
+    print_tokens(buffer, token_count, NULL);
 
     // Pass the tokens to the parser
     Parser* parser = create_parser(buffer, token_count);

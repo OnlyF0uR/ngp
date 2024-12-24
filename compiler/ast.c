@@ -23,6 +23,23 @@ char* binary_op_to_str(BinaryOperator op) {
     }
 }
 
+BinaryOperator str_to_binary_op(const char* str) {
+    if (strcmp(str, "+") == 0) return BIN_ADD;
+    else if (strcmp(str, "-") == 0) return BIN_SUB;
+    else if (strcmp(str, "*") == 0) return BIN_MUL;
+    else if (strcmp(str, "/") == 0) return BIN_DIV;
+    else if (strcmp(str, "%") == 0) return BIN_MOD;
+    else if (strcmp(str, "&&") == 0) return BIN_AND;
+    else if (strcmp(str, "||") == 0) return BIN_OR;
+    else if (strcmp(str, "==") == 0) return BIN_EQ;
+    else if (strcmp(str, "!=") == 0) return BIN_NEQ;
+    else if (strcmp(str, "<") == 0) return BIN_LT;
+    else if (strcmp(str, ">") == 0) return BIN_GT;
+    else if (strcmp(str, "<=") == 0) return BIN_LE;
+    else if (strcmp(str, ">=") == 0) return BIN_GE;
+    else return -1;
+}
+
 char* unary_op_to_str(UnaryOperator op) {
     switch (op) {
         case UNARY_NEGATE: return "-";
@@ -59,6 +76,7 @@ ASTNode* create_reference_node(const char* name) {
     ASTNode* node = malloc(sizeof(ASTNode));
     node->type = AST_REFERENCE;
     node->reference.name = strdup_c(name);
+    node->reference.child = NULL;
     return node;
 }
 
@@ -88,10 +106,11 @@ ASTNode* create_function_call_node(const char* name, ASTNode** args, size_t arg_
     return node;
 }
 
-ASTNode* create_function_def_node(const char* name, char** param_names, char** param_types, size_t param_count, char* return_type, ASTNode* body) {
+ASTNode* create_function_def_node(const char* name, int is_public, char** param_names, char** param_types, size_t param_count, char* return_type, ASTNode* body) {
     ASTNode* node = malloc(sizeof(ASTNode));
     node->type = AST_FUNCTION_DEF;
     node->function_def.name = strdup_c(name);
+    node->function_def.is_public = is_public;
     node->function_def.param_names = param_names;
     node->function_def.param_types = param_types;
     node->function_def.param_count = param_count;
@@ -129,6 +148,13 @@ ASTNode* create_return_node(ASTNode* value) {
     ASTNode* node = malloc(sizeof(ASTNode));
     node->type = AST_RETURN;
     node->return_statement.value = value;
+    return node;
+}
+
+ASTNode* create_defer_node(ASTNode* value) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = AST_DEFER;
+    node->defer_statement.value = value;
     return node;
 }
 
@@ -174,6 +200,41 @@ ASTNode* create_cast_node(const char* type, ASTNode* value) {
     return node;
 }
 
+ASTNode* create_array_def_node(const char* name, const char* type, ASTNode* initializer) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = AST_ARRAY_DEF;
+    node->array_def.name = strdup_c(name);
+    node->array_def.type = strdup_c(type);
+    node->array_def.initializer = initializer;
+    return node;
+}
+
+ASTNode* create_array_access_node(const char* reference, ASTNode* index) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = AST_ARRAY_ACCESS;
+    node->array_access.reference = strdup_c(reference);
+    node->array_access.index = index;
+    node->array_access.child = NULL;
+    return node;
+}
+
+ASTNode* create_array_assignment_node(const char* reference, ASTNode* index, ASTNode* value) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = AST_ARRAY_ASSIGNMENT;
+    node->array_assignment.reference = strdup_c(reference);
+    node->array_assignment.index = index;
+    node->array_assignment.value = value;
+    return node;
+}
+
+ASTNode* create_literal_array_node(ASTNode** values, size_t value_count) {
+    ASTNode* node = malloc(sizeof(ASTNode));
+    node->type = AST_LITERAL_ARRAY;
+    node->literal_array.values = values;
+    node->literal_array.value_count = value_count;
+    return node;
+}
+
 void free_ast_node(ASTNode* node) {
     if (node == NULL) {
         return;
@@ -194,6 +255,7 @@ void free_ast_node(ASTNode* node) {
             break;
         case AST_REFERENCE:
             free(node->reference.name);
+            free_ast_node(node->reference.child);
             break;
         case AST_BINARY_OP:
             free_ast_node(node->binary_op.left);
@@ -235,6 +297,9 @@ void free_ast_node(ASTNode* node) {
         case AST_RETURN:
             free_ast_node(node->return_statement.value);
             break;
+        case AST_DEFER:
+            free_ast_node(node->defer_statement.value);
+            break;
         case AST_ASSIGNMENT:
             free(node->assignment.name);
             free_ast_node(node->assignment.value);
@@ -260,7 +325,27 @@ void free_ast_node(ASTNode* node) {
             free(node->cast.target_type);
             free_ast_node(node->cast.expr);
             break;
-
+        case AST_ARRAY_DEF:
+            free(node->array_def.name);
+            free(node->array_def.type);
+            free_ast_node(node->array_def.initializer);
+            break;
+        case AST_ARRAY_ACCESS:
+            free(node->array_access.reference);
+            free_ast_node(node->array_access.index);
+            free_ast_node(node->array_access.child);
+            break;
+        case AST_ARRAY_ASSIGNMENT:
+            free(node->array_assignment.reference);
+            free_ast_node(node->array_assignment.index);
+            free_ast_node(node->array_assignment.value);
+            break;
+        case AST_LITERAL_ARRAY:
+            for (size_t i = 0; i < node->literal_array.value_count; i++) {
+                free_ast_node(node->literal_array.values[i]);
+            }
+            free(node->literal_array.values);
+            break;
         default:
             break;
     }
@@ -285,6 +370,7 @@ void print_ast_node(ASTNode* node, size_t indent) {
             break;
         case AST_REFERENCE:
             printf("%*sReference: %s\n", (int)indent, "", node->reference.name);
+            print_ast_node(node->reference.child, indent + 2);
             break;
         case AST_BINARY_OP:
             printf("%*sBinary Op: %s\n", (int)indent, "", binary_op_to_str(node->binary_op.op));
@@ -302,7 +388,7 @@ void print_ast_node(ASTNode* node, size_t indent) {
             }
             break;
         case AST_FUNCTION_DEF:
-            printf("%*sFunction Def: %s\n", (int)indent, "", node->function_def.name);
+            printf("%*sFunction Def: %s (pub: %d)\n", (int)indent, "", node->function_def.name, node->function_def.is_public);
             for (size_t i = 0; i < node->function_def.param_count; i++) {
                 printf("%*sParam: %s\n", (int)indent + 2, "", node->function_def.param_names[i]);
             }
@@ -329,6 +415,10 @@ void print_ast_node(ASTNode* node, size_t indent) {
             printf("%*sReturn:\n", (int)indent, "");
             print_ast_node(node->return_statement.value, indent + 2);
             break;
+        case AST_DEFER:
+            printf("%*sDefer:\n", (int)indent, "");
+            print_ast_node(node->defer_statement.value, indent + 2);
+            break;
         case AST_ASSIGNMENT:
             printf("%*sAssignment: %s\n", (int)indent, "", node->assignment.name);
             print_ast_node(node->assignment.value, indent + 2);
@@ -349,6 +439,25 @@ void print_ast_node(ASTNode* node, size_t indent) {
         case AST_CAST:
             printf("%*sCast: %s\n", (int)indent, "", node->cast.target_type);
             print_ast_node(node->cast.expr, indent + 2);
+            break;
+        case AST_ARRAY_DEF:
+            printf("%*sArray Def: %s %s\n", (int)indent, "", node->array_def.name, node->array_def.type);
+            print_ast_node(node->array_def.initializer, indent + 2);
+            break;
+        case AST_ARRAY_ACCESS:
+            printf("%*sArray Access: %s\n", (int)indent, "", node->array_access.reference);
+            print_ast_node(node->array_access.index, indent + 2);
+            break;
+        case AST_ARRAY_ASSIGNMENT:
+            printf("%*sArray Assignment: %s\n", (int)indent, "", node->array_assignment.reference);
+            print_ast_node(node->array_assignment.index, indent + 2);
+            print_ast_node(node->array_assignment.value, indent + 2);
+            break;
+        case AST_LITERAL_ARRAY:
+            printf("%*sLiteral Array:\n", (int)indent, "");
+            for (size_t i = 0; i < node->literal_array.value_count; i++) {
+                print_ast_node(node->literal_array.values[i], indent + 2);
+            }
             break;
         default:
             break;

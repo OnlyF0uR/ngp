@@ -20,7 +20,7 @@ fn main :: u8 {
   i32 some_number1 = 1;
   i32 some_number2 = 3;
 
-  i32 some_number3 = sum(number1, number2);
+  i32 some_number3 = sum(some_number1, some_number2);
 
   std.iostream.println(some_number3);
 
