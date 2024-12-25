@@ -77,11 +77,7 @@ ASTNode* parse_reference(Parser* parser, int is_tracking_function_args) {
         Token* next = next_token(parser);
 
         if (is_tracking_function_args == 1) {
-            if (next->type == T_R_PAREN) {
-                return buffer;
-            } else if (next->type == T_COMMA) {
-                continue;
-            } else if (next->type == T_SEMICOLON) {
+            if (next->type == T_COMMA || next->type == T_R_PAREN) {
                 return buffer;
             }
         }
@@ -92,14 +88,28 @@ ASTNode* parse_reference(Parser* parser, int is_tracking_function_args) {
             size_t arg_count = 0;
 
             while (1) {
-                Token* next = next_token(parser);
-                if (next->type == T_R_PAREN) {
-                    break;
+                Token* next = peak_token(parser);
+                if (peak_token(parser)->type == T_COMMA) {
+                    parser->current++;
+                    continue;
+                } else {
+                    // Parse the argument
+                    ASTNode* arg = parse_reference(parser, 1);
+                    args = realloc(args, sizeof(ASTNode*) * (arg_count + 1));
+                    if (args == NULL) {
+                        error(parser, "Out of memory");
+                    }
+
+                    args[arg_count] = arg;
+                    arg_count++;
+
+                    // Check current token
+                    if (current_token(parser)->type == T_R_PAREN) {
+                        // We don't skip past the current token ) because the next iteration of
+                        // the loop in will get the next_token
+                        break;
+                    }
                 }
-
-                // TODO: Parse the function parameters
-
-                parser->current++;
             }
 
             if (buffer == NULL) {
@@ -206,7 +216,7 @@ ASTNode* parse_reference(Parser* parser, int is_tracking_function_args) {
             }
         }
         else if (next->type == T_L_BRACKET) {
-            // This is an array initializer [1, 2, 3]
+            // This is an array initializer [1, 2, 3], NOT a type definition
             ASTNode** array_values = NULL;
             size_t array_value_count = 0;
 
@@ -377,10 +387,12 @@ void parse_ast_body(Parser* parser, ASTNode*** body_statements, size_t* body_stm
             }
 
             // Then the next has to be either a semicolon or an equal sign
-            Token* equal_or_semicolon = peak_token(parser);
+            Token* equal_or_semicolon = next_token(parser);
             if (equal_or_semicolon->type == T_OPERATOR && strcmp(equal_or_semicolon->value, "=") == 0) {
-                // The next one would be some reference
                 ASTNode* ref = parse_reference(parser, 0);
+                if (ref == NULL) {
+                    error(parser, "Expected reference after type declaration");
+                }
                 ASTNode* variable_def = create_variable_def_node(next->value, token->value, ref);
 
                 *body_statements = realloc(*body_statements, sizeof(ASTNode*) * (*body_stmt_count + 1));
@@ -403,7 +415,15 @@ void parse_ast_body(Parser* parser, ASTNode*** body_statements, size_t* body_stm
                 // Then we add the variable def to the body
                 (*body_statements)[*body_stmt_count] = type_decl;
                 (*body_stmt_count)++;
+            } else {
+                error(parser, "Expected ';' or '=' after type declaration");
             }
+
+            // At this point we should have handled the entire type declaration
+            if (current_token(parser)->type != T_SEMICOLON) {
+                error(parser, "Expected ';' after type declaration");
+            }
+
         } else if (token->type == T_L_BRACKET) {
             // If this is the type then the next is the name
             Token* arr_type = next_token(parser);
@@ -422,7 +442,7 @@ void parse_ast_body(Parser* parser, ASTNode*** body_statements, size_t* body_stm
             }
 
             // Then the next has to be either a semicolon or an equal sign
-            Token* equal_or_semicolon = peak_token(parser);
+            Token* equal_or_semicolon = next_token(parser);
             if (equal_or_semicolon->type == T_OPERATOR && strcmp(equal_or_semicolon->value, "=") == 0) {
                 // The next one would be some reference
                 ASTNode* ref = parse_reference(parser, 0);
@@ -455,7 +475,7 @@ void parse_ast_body(Parser* parser, ASTNode*** body_statements, size_t* body_stm
             Token* identifier_or_assign = next_token(parser);
             if (identifier_or_assign->type == T_IDENTIFIER) {
                 // Then the next has to be either a semicolon or an equal sign
-                Token* equal_or_semicolon = peak_token(parser);
+                Token* equal_or_semicolon = next_token(parser);
                 if (equal_or_semicolon->type == T_OPERATOR && strcmp(equal_or_semicolon->value, "=") == 0) {
                     // The next one would be some reference
                     ASTNode* ref = parse_reference(parser, 0);
