@@ -460,6 +460,7 @@ void print_ast_node(ASTNode* node, size_t indent) {
             }
             break;
         default:
+            printf("%*sUnknown node type\n", (int)indent, "");
             break;
     }
 }
